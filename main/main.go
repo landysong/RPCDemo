@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"rpcdemo"
@@ -48,13 +49,14 @@ func main() {
 
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second)
+		//time.Sleep(time.Second)
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			args := &Args{i, i * i}
 			var reply int
-			if err := client.Call("Foo.Sum", args, &reply); err != nil {
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			if err := client.Call(ctx, "Foo.Sum", args, &reply); err != nil {
 				log.Fatal("call Foo.Sum error:", err)
 			}
 			log.Printf("%d + %d = %d", args.Num1, args.Num2, reply)
