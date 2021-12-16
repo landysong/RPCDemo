@@ -7,11 +7,18 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"reflect"
 	"rpcdemo/codec"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	connected        = "200 Connected to RPC Demo"
+	defaultRPCPath   = "/_rpcdemo_"
+	defaultDebugPath = "/debug/rpcdemo"
 )
 
 const MagicNumber = 0x3bef5c
@@ -38,6 +45,34 @@ func NewServer() *Server {
 }
 
 var DefaultServer = NewServer()
+
+func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "CONNECT" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = io.WriteString(w, "405 must CONNECT\n")
+		return
+	}
+	// 备件
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		log.Print("rpc hijacker ", req.RemoteAddr, ": ", err.Error())
+		return
+	}
+
+	_, _ = io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
+	server.ServerConn(conn)
+}
+
+func (server *Server) HandleHTTP() {
+	http.Handle(defaultRPCPath, server)
+	http.Handle(defaultDebugPath, debugHTTP{server})
+	log.Println("rpc server debug path:", defaultDebugPath)
+}
+
+func HandleHTTP() {
+	DefaultServer.HandleHTTP()
+}
 
 func (server *Server) Register(rcvr interface{}) error {
 	s := newService(rcvr)

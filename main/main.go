@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"net/http"
 	"rpcdemo"
 	"sync"
 	"time"
@@ -20,7 +21,7 @@ func (f Foo) Sum(args Args, reply *int) error {
 	return nil
 }
 
-func startServer(addr chan string) {
+func startServer(addrCh chan string) {
 	// 注册方法
 	var foo Foo
 	if err := rpcdemo.Register(&foo); err != nil {
@@ -33,34 +34,45 @@ func startServer(addr chan string) {
 	}
 
 	log.Println("start rpc server on:", l.Addr())
-	addr <- l.Addr().String()
+	addrCh <- l.Addr().String()
 	rpcdemo.Accept(l)
 }
 
-func main() {
-	log.SetFlags(0)
-	addr := make(chan string)
-	go startServer(addr)
-	// client
-	client, _ := rpcdemo.Dial("tcp", <-addr)
+func startHTTPServer(addrCh chan string) {
+	// 注册方法
+	var foo Foo
+	l, _ := net.Listen("tcp", ":9999")
+	_ = rpcdemo.Register(&foo)
+	rpcdemo.HandleHTTP()
+	addrCh <- l.Addr().String()
+	_ = http.Serve(l, nil)
+}
+
+func call(addrCh chan string) {
+	client, _ := rpcdemo.DialHTTP("tcp", <-addrCh)
 	defer func() { _ = client.Close() }()
 
 	time.Sleep(time.Second)
-
+	// send request & receive response
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
-		//time.Sleep(time.Second)
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			args := &Args{i, i * i}
+			args := &Args{Num1: i, Num2: i * i}
 			var reply int
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-			if err := client.Call(ctx, "Foo.Sum", args, &reply); err != nil {
+			if err := client.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
 				log.Fatal("call Foo.Sum error:", err)
 			}
 			log.Printf("%d + %d = %d", args.Num1, args.Num2, reply)
 		}(i)
 	}
 	wg.Wait()
+}
+
+func main() {
+	log.SetFlags(0)
+	ch := make(chan string)
+	go call(ch)
+	startHTTPServer(ch)
 }
