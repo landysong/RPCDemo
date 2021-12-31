@@ -77,7 +77,7 @@ func HandleHTTP() {
 func (server *Server) Register(rcvr interface{}) error {
 	s := newService(rcvr)
 	if _, dup := server.serviceMap.LoadOrStore(s.name, s); dup {
-		return errors.New("rpc: service already defind: " + s.name)
+		return errors.New("rpc: service already defined: " + s.name)
 	}
 	return nil
 }

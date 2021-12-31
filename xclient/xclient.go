@@ -12,7 +12,7 @@ type XClient struct {
 	d       Discovery
 	mode    SelectMode
 	opt     *Option
-	mu      sync.Mutex
+	mu      sync.Mutex // protect following
 	clients map[string]*Client
 }
 
@@ -26,6 +26,7 @@ func (xc *XClient) Close() error {
 	xc.mu.Lock()
 	defer xc.mu.Unlock()
 	for key, client := range xc.clients {
+		// I have no idea how to deal with error, just ignore it.
 		_ = client.Close()
 		delete(xc.clients, key)
 	}
@@ -42,7 +43,8 @@ func (xc *XClient) dial(rpcAddr string) (*Client, error) {
 		client = nil
 	}
 	if client == nil {
-		client, err := XDial(rpcAddr, xc.opt)
+		var err error
+		client, err = XDial(rpcAddr, xc.opt)
 		if err != nil {
 			return nil, err
 		}
@@ -59,6 +61,9 @@ func (xc *XClient) call(rpcAddr string, ctx context.Context, serviceMethod strin
 	return client.Call(ctx, serviceMethod, args, reply)
 }
 
+// Call invokes the named function, waits for it to complete,
+// and returns its error status.
+// xc will choose a proper server.
 func (xc *XClient) Call(ctx context.Context, serviceMethod string, args, reply interface{}) error {
 	rpcAddr, err := xc.d.Get(xc.mode)
 	if err != nil {
@@ -100,6 +105,5 @@ func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, re
 		}(rpcAddr)
 	}
 	wg.Wait()
-	cancel()
 	return e
 }
