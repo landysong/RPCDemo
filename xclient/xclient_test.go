@@ -18,7 +18,7 @@ func (f Foo) Sum(args Args, reply *int) error {
 }
 
 func call(addr1, addr2 string) (int, error) {
-	d := NewMultiServersDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+	d := NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
 	xc := NewXClient(d, RandomSelect, nil)
 	defer func() { _ = xc.Close() }()
 	var reply int
@@ -54,7 +54,7 @@ func TestXClient_Call(t *testing.T) {
 	addr2 := <-ch2
 
 	t.Run("XClient call", func(t *testing.T) {
-		d := NewMultiServersDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+		d := NewMultiServerDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
 		xc := NewXClient(d, RandomSelect, nil)
 		defer func() { _ = xc.Close() }()
 		var reply int
