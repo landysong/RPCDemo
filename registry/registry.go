@@ -1,7 +1,10 @@
 package registry
 
 import (
+	"log"
+	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,4 +58,56 @@ func (r *RpcRegistry) aliveServers() []string {
 	}
 	sort.Strings(alive)
 	return alive
+}
+
+func (r *RpcRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		w.Header().Set("X-RpcDemo-Servers", strings.Join(r.aliveServers(), ","))
+	case "POST":
+		addr := req.Header.Get("X-RpcDemo-Serve")
+		if addr == "" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		r.putServer(addr)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (r *RpcRegistry) HandleHTTP(registryPath string) {
+	http.Handle(registryPath, r)
+	log.Println("rpc registry path:", registryPath)
+}
+
+func HandleHTTP() {
+	DefaultRpcRegister.HandleHTTP(defaultPath)
+}
+
+func Heartbeat(registry, addr string, duration time.Duration) {
+	if duration == 0 {
+		duration = defaultTimeout - time.Duration(1)*time.Minute
+	}
+	var err error
+	err = sendHeartbeat(registry, addr)
+	go func() {
+		t := time.NewTicker(duration)
+		for err == nil {
+			<-t.C
+			err = sendHeartbeat(registry, addr)
+		}
+	}()
+}
+
+func sendHeartbeat(registry, addr string) error {
+	log.Println(addr, "send heart beat to registry", registry)
+	httpClient := &http.Client{}
+	req, _ := http.NewRequest("POST", registry, nil)
+	req.Header.Set("X-RpcDemo-Serve", addr)
+	if _, err := httpClient.Do(req); err != nil {
+		log.Println("rpc server: heart beat err:", err)
+		return err
+	}
+	return nil
 }
